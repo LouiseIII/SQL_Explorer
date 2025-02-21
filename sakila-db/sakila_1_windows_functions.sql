@@ -31,6 +31,7 @@ SELECT
 FROM RentalsByCustomMonth
 ORDER BY year_month_rental DESC, rank_customers;
 
+
 -- 📌 2] Analyse des revenus des films par catégorie
     -- Input : Tables `film`, `film_category`, `category`, `inventory` et `rental`
     -- Output :  
@@ -67,4 +68,45 @@ SELECT
     RANK() OVER (ORDER BY total_revenue) AS rank_by_revenue
 FROM CategoryRevenue
 
+
+-- 📌 3] Analyse des performances des employés du magasin
+    -- Input : Tables `staff` et `payment`
+    -- Output :  
+        -- Le mois et l’année (`year_month_payment`)
+        -- Le nom complet de l’employé (`staff_name`)
+        -- Le nombre total de paiements enregistrés (`total_transactions`)
+        -- Le montant total des paiements (`total_revenue`)
+        -- Le montant total des paiements du mois précédent (`previous_month_revenue`)
+        -- La variation en pourcentage des revenus d'un mois à l'autre (`revenue_change_pct`)
+        -- Le classement des employés dans le mois en fonction de leur chiffre d’affaires (`rank_in_month`)
+        -- Le chiffre d'affaires cumulé de chaque employé depuis le début (`cumulative_revenue`)
+        
+WITH PerformanceEmployeMonth AS (
+    SELECT
+        s.staff_id AS staff_id,
+        DATE_FORMAT(p.payment_date, '%Y-%m') AS year_month_payment,
+        CONCAT(s.first_name, ' ', s.last_name) AS staff_name,
+        COUNT(p.payment_id) AS total_transactions,
+        SUM(p.amount) AS total_revenue
+    FROM payment p
+    JOIN staff s ON p.staff_id = s.staff_id
+    GROUP BY year_month_payment, staff_name, staff_id
+)
+SELECT 
+    year_month_payment,
+    staff_name,
+    total_transactions,
+    total_revenue,
+    LAG(total_revenue) OVER (PARTITION BY staff_id ORDER BY year_month_payment) AS previous_month_revenue,
+    ROUND(
+        (total_revenue - COALESCE(LAG(total_revenue) OVER (PARTITION BY staff_id ORDER BY year_month_payment), 0)) /
+        NULLIF(COALESCE(LAG(total_revenue) OVER (PARTITION BY staff_id ORDER BY year_month_payment), 0), 0) * 100, 2
+    ) AS revenue_change_pct,
+    RANK() OVER (PARTITION BY year_month_payment ORDER BY total_revenue DESC) AS rank_in_month,
+    SUM(total_revenue) OVER (
+        PARTITION BY staff_id 
+        ORDER BY year_month_payment ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS cumulative_revenue
+FROM PerformanceEmployeMonth
+ORDER BY year_month_payment DESC, rank_in_month;
 
