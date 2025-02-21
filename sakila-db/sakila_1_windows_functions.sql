@@ -1,6 +1,7 @@
 -- Sommaire :
     -- 1] Analyse mensuelle des locations de films.
     -- 2] Analyse des revenus des films par catégorie
+    -- 3] Analyse des performances des employés du magasin
 
 
 -- 📌 1] Analyse mensuelle des locations de films.
@@ -80,7 +81,7 @@ FROM CategoryRevenue
         -- La variation en pourcentage des revenus d'un mois à l'autre (`revenue_change_pct`)
         -- Le classement des employés dans le mois en fonction de leur chiffre d’affaires (`rank_in_month`)
         -- Le chiffre d'affaires cumulé de chaque employé depuis le début (`cumulative_revenue`)
-        
+
 WITH PerformanceEmployeMonth AS (
     SELECT
         s.staff_id AS staff_id,
