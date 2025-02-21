@@ -1,5 +1,10 @@
+-- Sommaire :
+    -- 1] Analyse mensuelle des locations de films.
+    -- 2] Analyse des revenus des films par catégorie
+
+
 -- 📌 1] Analyse mensuelle des locations de films.
-    -- Input : tables rental et customer
+    -- Input : tables `rental` et `customer`
     -- Output :  
         -- Le mois et l’année de location (`year_month_rental`)
         -- Le nom complet du client (`customer_name`)
@@ -27,6 +32,14 @@ FROM RentalsByCustomMonth
 ORDER BY year_month_rental DESC, rank_customers;
 
 -- 📌 2] Analyse des revenus des films par catégorie
+    -- Input : Tables `film`, `film_category`, `category`, `inventory` et `rental`
+    -- Output :  
+        -- Le nom de la catégorie (`category_name`)
+        -- Le nombre total de locations pour cette catégorie (`total_rentals`)
+        -- Le revenu total généré (`total_revenue`), basé sur `rental_rate * nombre de locations`
+        -- Le classement des catégories en fonction du revenu (`rank_by_revenue`)
+        -- Le revenu moyen par location pour chaque catégorie (`average_revenue_per_rental`)
+    
 WITH TotalRentalFilm AS (SELECT
     i.film_id,
     COUNT(rental_id) AS total_rentals
@@ -38,7 +51,8 @@ CategoryRevenue AS(
     SELECT DISTINCT
         c.name AS category_name,
         SUM(trf.total_rentals) AS total_rentals_category,
-        SUM(f.rental_rate * trf.total_rentals) AS total_revenue
+        SUM(f.rental_rate * trf.total_rentals) AS total_revenue,
+        SUM(f.rental_rate * trf.total_rentals) / SUM(trf.total_rentals) AS average_revenue_per_rental
     FROM film f 
     JOIN film_category fc ON f.film_id = fc.film_id
     JOIN category c ON fc.category_id = c.category_id
@@ -49,6 +63,7 @@ SELECT
     category_name,
     total_rentals_category,
     total_revenue,
+    average_revenue_per_rental,
     RANK() OVER (ORDER BY total_revenue) AS rank_by_revenue
 FROM CategoryRevenue
 
