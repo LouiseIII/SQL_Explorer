@@ -1,7 +1,8 @@
 -- Sommaire :
     -- 1] Analyse mensuelle des locations de films.
-    -- 2] Analyse des revenus des films par catégorie
-    -- 3] Analyse des performances des employés du magasin
+    -- 2] Analyse des revenus des films par catégorie.
+    -- 3] Analyse des performances des employés du magasin.
+    -- 4] Analyse de la fidélité des clients.
 
 
 -- 📌 1] Analyse mensuelle des locations de films.
@@ -66,8 +67,8 @@ SELECT
     total_rentals_category,
     total_revenue,
     average_revenue_per_rental,
-    RANK() OVER (ORDER BY total_revenue) AS rank_by_revenue
-FROM CategoryRevenue
+    RANK() OVER (ORDER BY total_revenue DESC) AS rank_by_revenue
+FROM CategoryRevenue;
 
 
 -- 📌 3] Analyse des performances des employés du magasin
@@ -111,3 +112,44 @@ SELECT
 FROM PerformanceEmployeMonth
 ORDER BY year_month_payment DESC, rank_in_month;
 
+
+-- 📌 4] Analyse de la fidélité des clients
+    -- Input : Tables `customer` et `rental`  
+    -- Output :  
+        -- Le nom complet du client (`customer_name`)  
+        -- Le nombre total de locations effectuées (`total_rentals`)  
+        -- La date de la première location (`first_rental_date`)  
+        -- La date de la dernière location (`last_rental_date`)  
+        -- Le nombre moyen de locations par mois (`avg_rentals_per_month`)  
+        -- Le classement des clients selon leur nombre total de locations (`rank_by_rentals`)  
+        -- La catégorie de fidélité du client (`loyalty_category`) :  
+            --   **"VIP"** : Plus de 40 locations  
+            --   **"Régulier"** : Entre 20 et 40 locations  
+            --   **"Occasionnel"** : Moins de 20 locations  
+
+WITH table_customer AS (
+    SELECT 
+        c.customer_id,
+        CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+        COUNT(r.rental_id) AS total_rentals,
+        MIN(r.rental_date) AS first_rental_date,
+        MAX(r.rental_date) AS last_rental_date
+    FROM customer c 
+    JOIN rental r ON c.customer_id = r.customer_id
+    GROUP BY c.customer_id
+)
+SELECT DISTINCT
+    tc.customer_name,
+    tc.total_rentals,
+    tc.first_rental_date,
+    tc.last_rental_date,
+    (tc.total_rentals / (TIMESTAMPDIFF(MONTH, tc.first_rental_date, tc.last_rental_date) + 1)) AS avg_rentals_per_month,
+    RANK() OVER (ORDER BY tc.total_rentals DESC) AS rank_by_rentals,
+    CASE 
+        WHEN tc.total_rentals > 40 THEN 'VIP'
+        WHEN tc.total_rentals BETWEEN 20 AND 40 THEN 'Régulier'
+        ELSE 'Occasionnel'
+    END AS loyalty_category
+FROM table_customer tc 
+JOIN rental r ON tc.customer_id = r.customer_id
+LIMIT 0, 10000
