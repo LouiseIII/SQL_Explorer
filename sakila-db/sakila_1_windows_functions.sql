@@ -4,6 +4,9 @@
     -- 3] Analyse des performances des employés du magasin.
     -- 4] Analyse de la fidélité des clients.
 
+    -- 5] Analyse des performances et fidélité des clients en fonction des locations et des paiements. 
+
+---------------------------------------------------------------------------------------------------------------------------------
 
 -- 📌 1] Analyse mensuelle des locations de films.
     -- Input : tables `rental` et `customer`
@@ -153,3 +156,82 @@ SELECT DISTINCT
 FROM table_customer tc 
 JOIN rental r ON tc.customer_id = r.customer_id
 LIMIT 0, 10000
+
+
+-- 📌 5] Analyse des performances et fidélité des clients en fonction des locations et des paiements. 
+    -- Input :  Tables `customer`, `rental`, `payment`.
+    -- Output :  
+        -- `customer_name` : Nom complet du client.  
+        -- `total_rentals`, `total_payments` : Nombre total de locations effectuées et payé par le client.  
+        -- `avg_payment_per_rental` : Moyenne du montant payé par location.  
+        -- `first_rental_date`, `last_rental_date` : Date de la première et dernière location.  
+        -- `avg_rentals_per_month` : Nombre moyen de locations par mois.  
+        -- `last_3_months_payments`, `last_last_3_months_payments` : Montant payé au cours des (3) et (entre 3 et 6) derniers mois.  
+        -- `rank_by_payments` : Classement des clients selon leurs paiements totaux.  
+        -- `customer_category` : Catégorie de fidélité du client :  
+        --     **"Premium"** si `total_payments > 4000`  
+        --     **"Régulier"** si `total_payments` entre `3000 et 4000`  
+        --     **"Occasionnel"** si `total_payments < 3000`  
+        -- `payment_growth_pct` : Croissance des paiements en pourcentage sur les 3 derniers mois.  
+        
+WITH LastPaymentDate AS (
+    SELECT MAX(payment_date) AS last_payment_date FROM payment
+),
+Table_Customers AS( 
+    SELECT
+        c.customer_id,
+        CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+        COUNT(r.rental_id) AS total_rentals,
+        SUM(p.amount) AS total_payments,
+        MIN(r.rental_date) AS first_rental_date,
+        MAX(r.rental_date) AS last_rental_date,
+        SUM(CASE 
+                WHEN p.payment_date >= DATE_SUB(lpd.last_payment_date, INTERVAL 3 MONTH) 
+                THEN p.amount 
+                ELSE 0 
+            END) AS last_3_months_payments,
+        SUM(CASE 
+                WHEN p.payment_date >= DATE_SUB(lpd.last_payment_date, INTERVAL 6 MONTH) AND p.payment_date < DATE_SUB(lpd.last_payment_date, INTERVAL 3 MONTH)
+                THEN p.amount 
+                ELSE 0 
+            END) AS last_last_3_months_payments
+    FROM customer c
+    JOIN rental r ON c.customer_id = r.customer_id
+    JOIN payment p ON c.customer_id = p.customer_id
+    JOIN LastPaymentDate lpd ON 1=1
+    GROUP BY c.customer_id
+)
+SELECT
+    customer_name, total_rentals, total_payments, 
+    total_payments/NULLIF(total_rentals, 0) AS avg_payment_per_rental,
+    first_rental_date, last_rental_date,
+    total_rentals/(TIMESTAMPDIFF(Month, first_rental_date, last_rental_date)+1) AS avg_rentals_per_month,
+    last_3_months_payments, last_last_3_months_payments,
+    DENSE_RANK() OVER (ORDER BY total_payments DESC) AS rank_by_payments,
+    CASE
+        WHEN total_payments > 4000 THEN 'Premium'
+        WHEN total_payments > 3000 THEN 'Régulier'
+        ELSE 'Occasionnel'
+    END AS customer_category,
+    (last_3_months_payments-last_last_3_months_payments)/NULLIF(last_last_3_months_payments, 0) *100 AS payment_growth_pct
+FROM Table_Customers
+ORDER BY last_3_months_payments DESC;
+
+-- On check le nombre de payment effectué ces derniers mois. 
+
+WITH LastPaymentDate AS (
+    SELECT MAX(payment_date) AS last_payment_date FROM payment
+),
+PaymentsPeriods AS (
+    SELECT
+        p.payment_id,
+        LEAST(6, FLOOR(TIMESTAMPDIFF(MONTH, p.payment_date, lpd.last_payment_date))) + 1 AS periods
+    FROM payment p
+    JOIN LastPaymentDate lpd ON 1=1
+)
+SELECT 
+    COUNT(payment_id),
+    periods
+FROM PaymentsPeriods
+GROUP BY periods
+
