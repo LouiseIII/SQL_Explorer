@@ -1,3 +1,4 @@
+-- Active: 1740077473979@@127.0.0.1@3306@sakila
 -- Sommaire :
     -- 1] Analyse mensuelle des locations de films.
     -- 2] Analyse des revenus des films par catégorie.
@@ -5,6 +6,7 @@
     -- 4] Analyse de la fidélité des clients.
 
     -- 5] Analyse des performances et fidélité des clients en fonction des locations et des paiements. 
+    -- 6] Analyse des films, performances des acteurs et rentabilité des magasins. 
 
 ---------------------------------------------------------------------------------------------------------------------------------
 
@@ -173,7 +175,7 @@ LIMIT 0, 10000
         --     **"Régulier"** si `total_payments` entre `3000 et 4000`  
         --     **"Occasionnel"** si `total_payments < 3000`  
         -- `payment_growth_pct` : Croissance des paiements en pourcentage sur les 3 derniers mois.  
-        
+
 WITH LastPaymentDate AS (
     SELECT MAX(payment_date) AS last_payment_date FROM payment
 ),
@@ -234,4 +236,61 @@ SELECT
     periods
 FROM PaymentsPeriods
 GROUP BY periods
+
+
+-- 📌  6] Analyse des films, performances des acteurs et rentabilité des magasins. 
+    -- Input : `actor`, `film_actor`, `film`, `inventory`, `rental`, et `payment`. 
+    -- Output :  
+        -- `film_title` : Nom du film.  
+        -- `total_rentals` : Nombre total de locations du film.  
+        -- `total_revenue` : Revenu total généré par les paiements associés aux locations du film.  
+        -- `total_replacement_cost` : Coût total de remplacement du film.  
+        -- `profitability_ratio` : Rentabilité du film.  
+        -- `top_actor_name` : Acteur ayant joué dans le plus de films populaires.  
+
+WITH ActorPerf AS (
+    SELECT 
+        a.actor_id,
+        CONCAT(a.first_name, ' ', a.last_name) AS actor_name,
+        COUNT(fa.film_id) AS nbr_films
+    FROM actor a
+    JOIN film_actor fa ON a.actor_id = fa.actor_id
+    GROUP BY a.actor_id
+),
+TableFilm AS (
+    SELECT 
+        f.film_id,
+        f.title AS film_title,
+        COUNT(r.rental_id) AS total_rentals,
+        SUM(p.amount) AS total_revenue,
+        SUM(f.replacement_cost) AS total_replacement_cost,
+        (SELECT a.actor_id 
+         FROM film_actor fa
+         JOIN ActorPerf a ON a.actor_id = fa.actor_id
+         WHERE fa.film_id = f.film_id
+         ORDER BY a.nbr_films DESC 
+         LIMIT 1) AS best_actor_id
+
+    FROM film f
+    JOIN inventory i USING (film_id)
+    JOIN rental r ON r.inventory_id = i.inventory_id
+    JOIN payment p ON p.customer_id = r.customer_id 
+        AND p.payment_date BETWEEN r.rental_date AND DATE_ADD(r.rental_date, INTERVAL 1 DAY)
+    GROUP BY f.film_id
+)
+SELECT 
+    tf.film_title,
+    tf.total_rentals, 
+    tf.total_revenue,
+    tf.total_replacement_cost,
+    (tf.total_revenue / NULLIF(tf.total_replacement_cost, 0)) * 100 AS profitability_ratio,
+    ap.actor_name AS top_actor_name,
+    DENSE_RANK() OVER (ORDER BY tf.total_revenue DESC) AS film_rank
+FROM TableFilm tf
+LEFT JOIN ActorPerf ap ON ap.actor_id = tf.best_actor_id;
+
+
+
+
+
 
